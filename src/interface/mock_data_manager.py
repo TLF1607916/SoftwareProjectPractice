@@ -265,14 +265,14 @@ class MockDataManager:
 
         if face_id not in self._simulated_records or count is not None:
             records = []
-            record_count = count or random.randint(5, 15)
 
             sessions_created = {}
+            session_count = count or random.randint(5, 15)
 
-            for _ in range(record_count):
+            for _ in range(session_count):
                 day = random.randint(20, 29)
                 hour = random.randint(9, 16)
-                minute = random.randint(0, 59)
+                minute = random.randint(0, 30)
 
                 date = f"2026-04-{day:02d}"
                 time = f"{hour:02d}:{minute:02d}:00"
@@ -284,24 +284,33 @@ class MockDataManager:
                 else:
                     session = sessions_created[session_key]
 
-                scores = self.generate_realtime_scores()
+            for session in sessions_created.values():
+                record_count_per_session = random.randint(15, 40)
+                end_time_part = session.end_time.split(" ")[1]
+                start_time_part = session.start_time.split(" ")[1]
+                session_duration = (int(end_time_part.split(":")[0]) - int(start_time_part.split(":")[0])) * 3600 + \
+                                  (int(end_time_part.split(":")[1]) - int(start_time_part.split(":")[1])) * 60
 
-                record = MockFocusRecord(
-                    session_id=session.session_id,
-                    timestamp=random.uniform(0, 3600),
-                    head_pose_score=scores.get("head_pose", 85),
-                    behavior_score=scores.get("behavior", 85),
-                    expression_score=scores.get("expression", 85),
-                    evidence_score=scores.get("evidence", 85),
-                    people_score=scores.get("people", 90),
-                    final_focus_score=scores.get("final_focus", 85.0),
-                    is_force_zero=False,
-                    date=date,
-                    time=time
-                )
-                records.append(record)
+                for i in range(record_count_per_session):
+                    timestamp = (i / record_count_per_session) * session_duration
+                    scores = self.generate_realtime_scores()
 
-            records.sort(key=lambda x: (x.date, x.time), reverse=True)
+                    record = MockFocusRecord(
+                        session_id=session.session_id,
+                        timestamp=timestamp,
+                        head_pose_score=scores.get("head_pose", 85),
+                        behavior_score=scores.get("behavior", 85),
+                        expression_score=scores.get("expression", 85),
+                        evidence_score=scores.get("evidence", 85),
+                        people_score=scores.get("people", 90),
+                        final_focus_score=scores.get("final_focus", 85.0),
+                        is_force_zero=False,
+                        date=session.start_time.split(" ")[0],
+                        time=session.start_time.split(" ")[1]
+                    )
+                    records.append(record)
+
+            records.sort(key=lambda x: (x.date, x.time, x.timestamp), reverse=True)
             self._simulated_records[face_id] = records
 
         return [
@@ -362,6 +371,48 @@ class MockDataManager:
                 "abnormal_event_count": s.abnormal_event_count
             }
             for s in sessions
+        ]
+
+    def generate_records_with_session_id(self, session_id: str, start_time: str, end_time: str) -> List[Dict[str, Any]]:
+        """为指定会话生成专注度评分记录"""
+        if not self._global_enabled:
+            return []
+
+        date = start_time.split(" ")[0]
+        st = start_time.split(" ")[1]
+        et = end_time.split(" ")[1]
+        session_duration = (int(et.split(":")[0]) - int(st.split(":")[0])) * 3600 + \
+                          (int(et.split(":")[1]) - int(st.split(":")[1])) * 60
+        if session_duration <= 0:
+            session_duration = 3600
+
+        record_count = random.randint(15, 40)
+        records = []
+        for i in range(record_count):
+            scores = self.generate_realtime_scores()
+            records.append({
+                "session_id": session_id,
+                "timestamp": (i / record_count) * session_duration,
+                "date": date,
+                "time": st,
+                "head_pose_score": scores.get("head_pose", 85),
+                "behavior_score": scores.get("behavior", 85),
+                "expression_score": scores.get("expression", 85),
+                "evidence_score": scores.get("evidence", 85),
+                "people_score": scores.get("people", 90),
+                "final_focus_score": scores.get("final_focus", 85.0),
+                "is_force_zero": False,
+                "focus_score": scores.get("final_focus", 85.0),
+            })
+        records.sort(key=lambda x: x["timestamp"])
+        return records
+
+    def generate_camera_list(self) -> List[Dict[str, Any]]:
+        """生成模拟摄像头列表"""
+        return [
+            {"device_id": 0, "device_name": "Integrated Camera"},
+            {"device_id": 1, "device_name": "USB Camera HD"},
+            {"device_id": 2, "device_name": "Webcam Pro 3000"},
         ]
 
     def generate_alarm_events(self, session_id: str) -> List[Dict[str, Any]]:
