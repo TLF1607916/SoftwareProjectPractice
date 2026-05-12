@@ -26,6 +26,10 @@ class DatabaseService:
         self._initialized = True
         self._conn_mgr: ConnectionManager = connection_manager
         self._schema_mgr: SchemaManager = schema_manager
+        self._command_handlers: Dict[str, callable] = {
+            "query_sessions": self._query_sessions,
+            "query_focus_records": self._query_focus_records,
+        }
 
     def initialize(self, db_path: str) -> None:
         """初始化数据库连接并校验 schema"""
@@ -34,21 +38,15 @@ class DatabaseService:
         print(f"[DatabaseService] 数据库初始化完成: {db_path}")
 
     def handle_command(self, command: str, params: Dict[str, Any]) -> Optional[List[Dict[str, Any]]]:
-        """命令路由：将字符串命令分发到对应的处理方法
+        """命令路由：字典分发给对应的处理方法
 
-        当前支持的 stub 命令:
-            query_sessions       -> _query_sessions
-            query_focus_records  -> _query_focus_records
-
-        后续扩展时在此方法中添加 elif 分支即可。
+        后续扩展时在 _command_handlers 字典中添加映射即可。
         """
-        if command == "query_sessions":
-            return self._query_sessions(params)
-        elif command == "query_focus_records":
-            return self._query_focus_records(params)
-        else:
-            print(f"[DatabaseService] 未知命令: {command}")
-            return None
+        handler = self._command_handlers.get(command)
+        if handler is not None:
+            return handler(params)
+        print(f"[DatabaseService] 未知命令: {command}")
+        return None
 
     def _query_sessions(self, params: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Stub: 查询会话信息列表
